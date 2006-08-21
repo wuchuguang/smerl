@@ -131,10 +131,14 @@
 	 curry/5,
 	 curry_add/3,
 	 curry_add/4,
+	 curry_add/6,
 	 curry_replace/3,
 	 curry_replace/4
 	]).
-	 
+
+-define(L(Obj), io:format("LOG ~w ~p\n", [?LINE, Obj])).
+-define(S(Obj), io:format("LOG ~w ~s\n", [?LINE, Obj])).	 
+
 %% @type meta_ctx(). An opaque record used for manipulating a module.
 %% @type func_form(). The abstract form for the function, as described
 %%    in the ERTS Users' manual.
@@ -451,15 +455,14 @@ curry({function, Line, Name, Arity, Clauses}, NewParams) ->
 		  ZippedParams = lists:zip(FirstParams, NewParams),
 		  Matches =
 		      lists:foldl(
-			fun({{var, L2, VarName}, NewVal}, Acc) ->
-				L3 = L2+1,
-				[{match, L3, {var, L3, VarName},
-				  erl_parse:abstract(NewVal)} |Acc]
+			fun({Var, NewVal}, Acc) ->
+				[{match,1,Var, erl_parse:abstract(NewVal)} | Acc]
 			end, [], ZippedParams),
 		  [{clause, L1, LastParams, _Guards,
 		   Matches ++ Exprs} | Clauses1]
 	  end, [], Clauses),
     {ok, {function, Line, Name, Arity-length(NewParams), NewClauses}}.
+
 
 %% @doc Curry the given function from the given module with
 %%  the given param(s)
@@ -523,6 +526,22 @@ curry_add(MetaCtx, {function, _Line, Name, Arity, _Clauses}, Params) ->
 %%    {ok, NewMetaCtx::meta_ctx()} | {error, Err}
 curry_add(MetaCtx, Name, Arity, Params) ->
     curry_add(MetaCtx, Name, Arity, Params, false).
+
+%% @doc Add the curried form of the function with the given name
+%%   and arity in the given module. The function is added with
+%%   the new name.
+%%
+%% @spec curry_add(MetaCtx::meta_ctx(), Module:atom(),
+%%   Name::atom(), Arity::integer(), Params::term() | list(),
+%%   NewName::atom()) ->
+%%     {ok, NewCtx::meta_ctx()} | {error, Error}
+curry_add(MetaCtx, Module, Name, Arity, Params, NewName) ->
+    case curry(Module, Name, Arity, Params, NewName) of
+	{ok, Form} ->
+	    add_func(MetaCtx, Form);
+	Err ->
+	    Err
+    end.
 
 curry_add(MetaCtx, Name, Arity, Params, Remove) ->
     case get_func(MetaCtx, Name, Arity) of
