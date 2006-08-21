@@ -66,7 +66,8 @@
 %%
 %%   <p>New capabilities (8/17/06):</p>
 %%   <p>smerl:add_func and smerl:replace_func can now accept fun expressions
-%%   as parameters. Now, you longer have to rely on source strings and abstract
+%%   as parameters. <b>This only works in the Erlang shell at the moment</b>.
+%%   With fun expressions, you longer have to rely on source strings and abstract
 %%   forms to add behaviour to a module. Even closures are supported. Closure
 %%   variables are expanded in the beginning the function. Example:
 %%
@@ -527,9 +528,9 @@ curry_add(MetaCtx, {function, _Line, Name, Arity, _Clauses}, Params) ->
 curry_add(MetaCtx, Name, Arity, Params) ->
     curry_add(MetaCtx, Name, Arity, Params, false).
 
-%% @doc Add the curried form of the function with the given name
-%%   and arity in the given module. The function is added with
-%%   the new name.
+%% @doc Curry the function with the given name
+%%   and arity in the given module, rename the curried form, and
+%%   add it to the MetaCtx object.
 %%
 %% @spec curry_add(MetaCtx::meta_ctx(), Module:atom(),
 %%   Name::atom(), Arity::integer(), Params::term() | list(),
