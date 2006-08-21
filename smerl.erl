@@ -132,6 +132,7 @@
 	 curry/5,
 	 curry_add/3,
 	 curry_add/4,
+	 curry_add/5,
 	 curry_add/6,
 	 curry_replace/3,
 	 curry_replace/4
@@ -526,7 +527,21 @@ curry_add(MetaCtx, {function, _Line, Name, Arity, _Clauses}, Params) ->
 %%   Params::term() | list()) ->
 %%    {ok, NewMetaCtx::meta_ctx()} | {error, Err}
 curry_add(MetaCtx, Name, Arity, Params) ->
-    curry_add(MetaCtx, Name, Arity, Params, false).
+    curry_change(MetaCtx, Name, Arity, Params, false).
+
+%% @doc Add the curried form for the function from the given module
+%%   to the MetaCtx object.
+%%
+%% @spec curry_add(MetaCtx::meta_ctx(), Module::atom(), Name::atom(),
+%%   Arity::integer(), Params::term() | list()) ->
+%%     {ok, NewCtx::meta_ctx()} | {error, Err}
+curry_add(MetaCtx, Module, Name, Arity, Params) ->
+    case curry(Module, Name, Arity, Params) of
+	{ok, Form} ->
+	    add_func(MetaCtx, Form);	    
+	Err ->
+	    Err
+    end.
 
 %% @doc Curry the function with the given name
 %%   and arity in the given module, rename the curried form, and
@@ -544,7 +559,7 @@ curry_add(MetaCtx, Module, Name, Arity, Params, NewName) ->
 	    Err
     end.
 
-curry_add(MetaCtx, Name, Arity, Params, Remove) ->
+curry_change(MetaCtx, Name, Arity, Params, Remove) ->
     case get_func(MetaCtx, Name, Arity) of
         {ok, OldForm} ->
             case curry(OldForm, Params) of
@@ -581,4 +596,4 @@ curry_replace(MetaCtx, {function, _Line, Name, Arity, _Clauses}, Params) ->
 %%   Arity::integer(), Params::term() | list()) ->
 %%    {ok, NewMetaCtx::meta_ctx()} | {error, Err}
 curry_replace(MetaCtx, Name, Arity, Params) ->
-    curry_add(MetaCtx, Name, Arity, Params, true).
+    curry_change(MetaCtx, Name, Arity, Params, true).
