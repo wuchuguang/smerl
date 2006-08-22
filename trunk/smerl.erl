@@ -115,8 +115,10 @@
 	 for_module/1,
 	 for_file/1,
          get_module/1,
+	 set_module/2,
          get_forms/1,
          get_exports/1,
+	 remove_export/3,
 	 add_func/2,
 	 add_func/3,
 	 add_func/4,
@@ -173,9 +175,11 @@ for_module(ModuleName) when is_atom(ModuleName) ->
 	    {error, Err}
     end.
 
-%% @doc Create a context record for a module described in the given source file.
+%% @doc Create a context record for a module described in the given source
+%% file.
 %%
-%% @spec for_file(SrcFilePath::string()) -> {ok, meta_ctx()} | {error, invalid_module}
+%% @spec for_file(SrcFilePath::string()) -> {ok, meta_ctx()} |
+%%   {error, invalid_module}
 for_file(SrcFilePath) ->
     case epp:parse_file(SrcFilePath, [], []) of
 	{ok, Forms} ->
@@ -185,14 +189,39 @@ for_file(SrcFilePath) ->
     end.
 
 
+%% @doc Return the module name
+%%
+%% @spec(MetaCtx::meta_ctx()) -> atom()
 get_module(MetaCtx) -> 
     MetaCtx#meta_ctx.module.
 
+%% @doc Return the list of function forms for the module.
+%%
+%% @spec get_forms(MetaCtx::meta_ctx()) -> list()
 get_forms(MetaCtx) ->
     MetaCtx#meta_ctx.forms.
 
+%% @doc Return the list of exports for the module.
+%%
+%% @spec get_exports(MetaCtx::meta_ctx()) -> list()
 get_exports(MetaCtx) ->
     MetaCtx#meta_ctx.exports.
+
+%% @doc Set the module's name to the new name.
+%%
+%% @spec set_module(MetaCtx::meta_ctx(), NewName::atom()) ->
+%%   NewCtx::meta_ctx()
+set_module(MetaCtx, NewName) ->
+    MetaCtx#meta_ctx{module = NewName}.
+
+%% @doc Remove the given export from the list of exports for the module.
+%%
+%% @spec remove_export(MetaCtx::meta_ctx(), FuncName::atom(),
+%%   Arity::integer()) -> NewCtx::meta_ctx()
+remove_export(MetaCtx, FuncName, Arity) ->
+    MetaCtx#meta_ctx{exports =
+		     lists:delete({FuncName, Arity},
+			     MetaCtx#meta_ctx.exports)}.
 
 ctx_for_forms([_FileAttribute, {attribute, _, module, ModuleName}|Forms]) ->
     {Exports, OtherForms} =
@@ -360,8 +389,16 @@ has_func(MetaCtx, FuncName, Arity) ->
 
 %% @doc Get the form for the given function/arity.
 %% 
-%% @spec get_func(MetaCtx::meta_ctx(), FuncName::atom(), Arity::integer()) ->
-%%   {ok, func_form()} | {error, not_found}
+%% @spec get_func(MetaCtx::meta_ctx() | Module::atom(),
+%%   FuncName::atom(), Arity::integer()) ->
+%%     {ok, func_form()} | {error, not_found}
+get_func(Module, FuncName, Arity) when is_atom(Module) ->
+    case smerl:for_module(Module) of
+	{ok, C1} ->
+	    get_func(C1, FuncName, Arity);
+	Err ->
+	    Err
+    end;
 get_func(MetaCtx, FuncName, Arity) ->
     get_func2(MetaCtx#meta_ctx.forms, FuncName, Arity).
 
@@ -371,6 +408,7 @@ get_func2([{function, _Line, FuncName, Arity, _Clauses} = Form | _Rest], FuncNam
     {ok, Form};
 get_func2([_Form|Rest], FuncName, Arity) ->		      
     get_func2(Rest, FuncName, Arity).
+
 
 
 %% Replace an existing function with the new one. If the function doesn't exist
