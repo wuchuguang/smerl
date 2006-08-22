@@ -655,7 +655,8 @@ embed_params({function, L, Name, Arity, Clauses}, Vals) ->
 			    {Params2, Matches2, Vals1}) ->
 				case lists:keysearch(ParamName, 1, Vals1) of 
 				    {value, {_Name, Val} = Elem} ->
-					Match = {match, L1, Param, Val},
+					Match = {match, L1, Param,
+						 erl_parse:abstract(Val)},
 					{Params2, [Match | Matches2],
 					 lists:delete(Elem, Vals1)};
 				    false ->
