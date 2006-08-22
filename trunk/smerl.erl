@@ -662,7 +662,9 @@ embed_params({function, L, Name, Arity, Clauses}, Vals) ->
 					 lists:delete(Elem, Vals1)};
 				    false ->
 					{[Param | Params2], Matches2, Vals1}
-				end
+				end;
+			   (Param, {Params2, Matches2, Vals1}) ->
+				{[Param | Params2], Matches2, Vals1}
 			end, {[], [], Vals}, Params),
 		  [{clause, L1, lists:reverse(Params1), Guards,
 				lists:reverse(Matches1) ++ Exprs} | Clauses1]
@@ -703,6 +705,7 @@ embed_all(MetaMod, Vals) ->
 		  {[NewForm | Forms1], Exports2, NewExports2} 
 	  end, {[], Exports, []}, Forms),
     {NewForms1, NewExports1} =
-	{lists:reverse(NewForms), lists:reverse(NewExports)},
-    MetaMod#meta_mod{exports = Exports3 ++ NewExports1,
-		     forms = NewForms1}.
+	{NewForms, NewExports},
+    #meta_mod{module = get_module(MetaMod),
+	      exports = Exports3 ++ NewExports1,
+	      forms = NewForms1}.
