@@ -138,7 +138,8 @@
 	 curry_add/6,
 	 curry_replace/3,
 	 curry_replace/4,
-	 embed_params/2
+	 embed_params/2,
+	 embed_all/2
 	]).
 
 -define(L(Obj), io:format("LOG ~w ~p\n", [?LINE, Obj])).
@@ -675,3 +676,33 @@ embed_params({function, L, Name, Arity, Clauses}, Vals) ->
 	end,
     {function, L, Name, NewArity, lists:reverse(NewClauses)}.
 
+
+%% Apply the embed_params function with the given list of {Name, Value}
+%% pairs to all forms in the MetaMod object. Exports are preserved even
+%% for functions whose arity has changed.
+%%
+%% @spec embed_all(MetaMod::meta_mod(), Vals::[{Name::atom(),
+%%   Value::term()}]) -> NewMetaMod::meta_mod()
+embed_all(MetaMod, Vals) ->
+    Forms = get_forms(MetaMod),
+    Exports = get_exports(MetaMod),
+    {NewForms, Exports3, NewExports} =
+	lists:foldl(
+	  fun({function, _L, Name, Arity, _Clauses} = Form,
+	      {Forms1, Exports1, NewExports1}) ->
+		  {function, _, _, NewArity, _} = NewForm =
+		      embed_params(Form, Vals),
+		  Exports2 = lists:delete({Name, Arity}, Exports1),
+		  NewExports2 =
+		      case length(Exports2) == length(Exports1) of
+			  true ->
+			      NewExports1;
+			  false ->
+			      [{Name, NewArity} | NewExports1]
+		      end,
+		  {[NewForm | Forms1], Exports2, NewExports2} 
+	  end, {[], Exports, []}, Forms),
+    {NewForms1, NewExports1} =
+	{lists:reverse(NewForms), lists:reverse(NewExports)},
+    MetaMod#meta_mod{exports = Exports3 ++ NewExports1,
+		     forms = NewForms1}.
