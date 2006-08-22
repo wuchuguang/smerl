@@ -12,11 +12,11 @@
 %%   <p>Here's a quick example illustrating how to use Smerl:</p>
 %%   ``
 %%   test_smerl() ->
-%%     C1 = smerl:new(foo),
-%%     {ok, C2} = smerl:add_func(C1, "bar() -> 1 + 1."),
-%%     smerl:compile(C2),
+%%     M1 = smerl:new(foo),
+%%     {ok, M2} = smerl:add_func(M1, "bar() -> 1 + 1."),
+%%     smerl:compile(M2),
 %%     foo:bar(),   % returns 2``
-%%     smerl:has_func(C2, bar, 0). % returns true
+%%     smerl:has_func(M2, bar, 0). % returns true
 %%
 %%   <p>New functions can be expressed either as strings of Erlang code
 %%   or as abstract forms. For more information, read the Abstract Format
@@ -26,7 +26,7 @@
 %%   <p>Using the abstract format, the 3rd line of the above example
 %%   would be written as</p>
 %%   ``
-%%     {ok,C2} = smerl:add_func(C1, {function,1,bar,0,
+%%     {ok,M2} = smerl:add_func(M1, {function,1,bar,0,
 %%                              [{clause,1,[],[],
 %%                               [{op,1,'+',{integer,1,1},{integer,1,1}}]}]).``
 %%
@@ -50,13 +50,13 @@
 %%   you can create a new module from an Erlang source file.</p>
 %%
 %%   <p>smerl:new, smerl:for_module and smerl:for_file return an
-%%   opaque context record for the module. To manipulate the module,
+%%   MetaMod object for the module. To manipulate the module,
 %%   use smerl:add_func and smerl:remove_func. Just remember not to
 %%   add the same function name with the same arity twice as it will
 %%   eventually result in a compilation error.</p>
 %%
 %%   <p>When you're ready to compile your module, call smerl:compile,
-%%   passing in the opaque context record. If there are no errors,
+%%   passing in the MetaMod object. If there are no errors,
 %%   you can start using the new module.</p>
 %%
 %%   <p>New capabilities (8/16/06):</p>
@@ -143,23 +143,23 @@
 -define(L(Obj), io:format("LOG ~w ~p\n", [?LINE, Obj])).
 -define(S(Obj), io:format("LOG ~w ~s\n", [?LINE, Obj])).	 
 
-%% @type meta_ctx(). An opaque record used for manipulating a module.
+%% @type meta_mod(). A tuple holding the abstract representation for module.
 %% @type func_form(). The abstract form for the function, as described
 %%    in the ERTS Users' manual.
 
-%% This is the context record. It's meant for use only internally.
--record(meta_ctx, {module, exports = [], forms = []}).
+%% The record type holding the abstract representation for a module.
+-record(meta_mod, {module, exports = [], forms = []}).
 
-%% @doc Create a context record for a new module with the given module name.
+%% @doc Create a record for a new module with the given module name.
 %%
-%% @spec new(Module::atom()) -> meta_ctx()
+%% @spec new(Module::atom()) -> meta_mod()
 new(ModuleName) when is_atom(ModuleName) ->
-    #meta_ctx{module = ModuleName}.
+    #meta_mod{module = ModuleName}.
 
-%% @doc Create a context record for manipulating an existing module.
+%% @doc Create a MetaMod object for manipulating an existing module.
 %%
 %% @spec for_module(ModuleName::atom() || string()) ->
-%%   {ok, meta_ctx()} | {error, Error}
+%%   {ok, meta_mod()} | {error, Error}
 for_module(ModuleName) when is_list(ModuleName) ->
     new(list_to_atom(ModuleName));
 for_module(ModuleName) when is_atom(ModuleName) ->
@@ -167,7 +167,7 @@ for_module(ModuleName) when is_atom(ModuleName) ->
 	Path when is_list(Path) ->
 	    case get_forms(ModuleName, Path) of
 		{ok, Forms} ->
-		    ctx_for_forms(Forms);
+		    mod_for_forms(Forms);
 		_Other ->    
 		    {error, invalid_module}
 	    end;
@@ -175,55 +175,55 @@ for_module(ModuleName) when is_atom(ModuleName) ->
 	    {error, Err}
     end.
 
-%% @doc Create a context record for a module described in the given source
+%% @doc Create a MetaMod object for a module described in the given source
 %% file.
 %%
-%% @spec for_file(SrcFilePath::string()) -> {ok, meta_ctx()} |
+%% @spec for_file(SrcFilePath::string()) -> {ok, meta_mod()} |
 %%   {error, invalid_module}
 for_file(SrcFilePath) ->
     case epp:parse_file(SrcFilePath, [], []) of
 	{ok, Forms} ->
-	    ctx_for_forms(Forms);
+	    mod_for_forms(Forms);
 	_err ->
 	    {error, invalid_module}
     end.
 
 
-%% @doc Return the module name
+%% @doc Return the module name for the MetaMod object.
 %%
-%% @spec(MetaCtx::meta_ctx()) -> atom()
-get_module(MetaCtx) -> 
-    MetaCtx#meta_ctx.module.
+%% @spec(MetaMod::meta_mod()) -> atom()
+get_module(MetaMod) -> 
+    MetaMod#meta_mod.module.
 
-%% @doc Return the list of function forms for the module.
+%% @doc Return the list of function forms in the MetaMod object.
 %%
-%% @spec get_forms(MetaCtx::meta_ctx()) -> list()
-get_forms(MetaCtx) ->
-    MetaCtx#meta_ctx.forms.
+%% @spec get_forms(MetaMod::meta_mod()) -> list()
+get_forms(MetaMod) ->
+    MetaMod#meta_mod.forms.
 
-%% @doc Return the list of exports for the module.
+%% @doc Return the list of exports in the MetaMod object.
 %%
-%% @spec get_exports(MetaCtx::meta_ctx()) -> list()
-get_exports(MetaCtx) ->
-    MetaCtx#meta_ctx.exports.
+%% @spec get_exports(MetaMod::meta_mod()) -> list()
+get_exports(MetaMod) ->
+    MetaMod#meta_mod.exports.
 
-%% @doc Set the module's name to the new name.
+%% @doc Set the MetaMod object's module name to the new name.
 %%
-%% @spec set_module(MetaCtx::meta_ctx(), NewName::atom()) ->
-%%   NewCtx::meta_ctx()
-set_module(MetaCtx, NewName) ->
-    MetaCtx#meta_ctx{module = NewName}.
+%% @spec set_module(MetaMod::meta_mod(), NewName::atom()) ->
+%%   NewMod::meta_mod()
+set_module(MetaMod, NewName) ->
+    MetaMod#meta_mod{module = NewName}.
 
-%% @doc Remove the given export from the list of exports for the module.
+%% @doc Remove the given export from the list of exports in the MetaMod object.
 %%
-%% @spec remove_export(MetaCtx::meta_ctx(), FuncName::atom(),
-%%   Arity::integer()) -> NewCtx::meta_ctx()
-remove_export(MetaCtx, FuncName, Arity) ->
-    MetaCtx#meta_ctx{exports =
+%% @spec remove_export(MetaMod::meta_mod(), FuncName::atom(),
+%%   Arity::integer()) -> NewMod::meta_mod()
+remove_export(MetaMod, FuncName, Arity) ->
+    MetaMod#meta_mod{exports =
 		     lists:delete({FuncName, Arity},
-			     MetaCtx#meta_ctx.exports)}.
+			     MetaMod#meta_mod.exports)}.
 
-ctx_for_forms([_FileAttribute, {attribute, _, module, ModuleName}|Forms]) ->
+mod_for_forms([_FileAttribute, {attribute, _, module, ModuleName}|Forms]) ->
     {Exports, OtherForms} =
 	lists:foldl(
 	  fun({attribute, _, export, ExportList},
@@ -234,11 +234,11 @@ ctx_for_forms([_FileAttribute, {attribute, _, module, ModuleName}|Forms]) ->
 	     (Form, {ExportsAcc, OtherAcc}) ->
 		  {ExportsAcc, [Form | OtherAcc]}
 	  end, {[], []}, Forms),
-    {ok, #meta_ctx{module = ModuleName,
+    {ok, #meta_mod{module = ModuleName,
 		   exports = Exports,
 		   forms = OtherForms
 		  }};
-ctx_for_forms(_) ->
+mod_for_forms(_) ->
     {error, invalid_module}.
 
 %% Get the abstract representation, if available, for the module.
@@ -263,49 +263,48 @@ get_forms(Module, Path) ->
 	    end
     end.
 
-%% @doc Add a new function to the module that corresponds to the given context,
-%%   and return the new context.
-%%   The new function will be added to the module's export list.
+%% @doc Add a new function to the MetaMod object and return the new MetaMod
+%%   object. The new function will be added to the module's export list.
 %%
-%% @spec add_func(MetaCtx::meta_ctx(), Form::func_form() | string()) ->
-%%   {ok, NewCtx::meta_ctx()} | {error, parse_error}
-add_func(MetaCtx, Form) ->
-    add_func(MetaCtx, Form, true).
+%% @spec add_func(MetaMod::meta_mod(), Form::func_form() | string()) ->
+%%   {ok, NewMod::meta_mod()} | {error, parse_error}
+add_func(MetaMod, Form) ->
+    add_func(MetaMod, Form, true).
 
-%% @doc Add a new function to the module that corresponds to the given context,
-%%   and return the new context. If Export == false, the function will not
-%%   be added to the module's export list.
+%% @doc Add a new function to the MetaMod object and return the new MetaMod
+%%   object. If Export == false, the function will not be added to the
+%%   MetaMod object's export list.
 %%
-%% @spec add_func(MetaCtx::meta_ctx(), Func::func_form() | string()) ->
-%%   {ok, NewCtx::meta_ctx()} | {error, parse_error}
-add_func(MetaCtx, Func, Export) when is_list(Func) ->
+%% @spec add_func(MetaMod::meta_mod(), Func::func_form() | string()) ->
+%%   {ok, NewMod::meta_mod()} | {error, parse_error}
+add_func(MetaMod, Func, Export) when is_list(Func) ->
     case parse_func_string(Func) of
 	{ok, Form} ->
-	    add_func(MetaCtx, Form, Export);
+	    add_func(MetaMod, Form, Export);
 	Err ->
 	    Err
     end;
-add_func(MetaCtx, {function, _Line, FuncName, Arity, _Clauses} = Form,
+add_func(MetaMod, {function, _Line, FuncName, Arity, _Clauses} = Form,
 	 true) ->
-    Foo = {ok, MetaCtx#meta_ctx{
-      exports = [{FuncName, Arity} | MetaCtx#meta_ctx.exports],
-      forms = [Form | MetaCtx#meta_ctx.forms]
+    Foo = {ok, MetaMod#meta_mod{
+      exports = [{FuncName, Arity} | MetaMod#meta_mod.exports],
+      forms = [Form | MetaMod#meta_mod.forms]
      }},
     Foo;
-add_func(MetaCtx, {function, _Line, _FuncName, _Arity, _Clauses} = Form,
+add_func(MetaMod, {function, _Line, _FuncName, _Arity, _Clauses} = Form,
 	 false) ->
-   {ok, MetaCtx#meta_ctx{forms = [Form | MetaCtx#meta_ctx.forms]}};
+   {ok, MetaMod#meta_mod{forms = [Form | MetaMod#meta_mod.forms]}};
 
-add_func(MetaCtx, Name, Fun) when is_function(Fun) ->
-    add_func(MetaCtx, Name, Fun, true);
+add_func(MetaMod, Name, Fun) when is_function(Fun) ->
+    add_func(MetaMod, Name, Fun, true);
 
 add_func(_, _, _) ->
     {error, parse_error}.
 
-add_func(MetaCtx, Name, Fun, Export) when is_function(Fun) ->
+add_func(MetaMod, Name, Fun, Export) when is_function(Fun) ->
     case form_for_fun(Name, Fun) of
 	{ok, Form} ->
-	    add_func(MetaCtx, Form, Export);
+	    add_func(MetaMod, Form, Export);
 	Err ->
 	    Err
     end.
@@ -347,22 +346,22 @@ parse_func_string(Func) ->
 	    {error, parse_error}
     end.
 
-%% @doc Try to remove the function from the module represented by the given
-%% context record and return the new context record.
-%% If the function isn't found, the original context record is returned.
+%% @doc Try to remove the function from the MetaMod object return the
+%%   resulting MetaMod object.
+%%   If the function isn't found, the original MetaMod object is returned.
 %%
-%% @spec remove_func(MetaCtx::meta_ctx(), FuncName::string(), Arity::integer())
-%%   -> NewCtx::meta_ctx()
+%% @spec remove_func(MetaMod::meta_mod(), FuncName::string(), Arity::integer())
+%%   -> NewMod::meta_mod()
 %%
-remove_func(MetaCtx, FuncName, Arity) ->
-    MetaCtx#meta_ctx{forms =
+remove_func(MetaMod, FuncName, Arity) ->
+    MetaMod#meta_mod{forms =
 		     lists:filter(
 		       fun({function, _Line, FuncName1, Arity1, _Clauses})
 			  when FuncName1 =:= FuncName, Arity =:= Arity1->
 			       false;
 			  (_) ->
 			       true
-		       end, MetaCtx#meta_ctx.forms),
+		       end, MetaMod#meta_mod.forms),
 		     exports =
 		     lists:filter(
 		       fun({FuncName1, Arity1})
@@ -371,25 +370,26 @@ remove_func(MetaCtx, FuncName, Arity) ->
 			       false;
 			  (_) ->
 			       true
-		       end, MetaCtx#meta_ctx.exports)
+		       end, MetaMod#meta_mod.exports)
 		      }.
 
-%% @doc Inspect whether a module has a function with the given name
+%% @doc Inspect whether a MetaMod object has a function with the given name
 %%   and arity.
-%% @spec has_func(MetaCtx::meta_ctx(), FuncName::atom(), Arity::integer()) ->
+%% @spec has_func(MetaMod::meta_mod(), FuncName::atom(), Arity::integer()) ->
 %%   bool()
-has_func(MetaCtx, FuncName, Arity) ->
+has_func(MetaMod, FuncName, Arity) ->
     lists:any(fun({function, _Line, FuncName1, Arity1, _Clauses})
 		 when FuncName1 == FuncName, Arity1 == Arity ->
 		      true;
 		 (_) ->
 		      false
-	      end, MetaCtx#meta_ctx.forms).
+	      end, MetaMod#meta_mod.forms).
 
 
-%% @doc Get the form for the given function/arity.
+%% @doc Get the form for the function with the given arity in the
+%%   MetaMod object.
 %% 
-%% @spec get_func(MetaCtx::meta_ctx() | Module::atom(),
+%% @spec get_func(MetaMod::meta_mod() | Module::atom(),
 %%   FuncName::atom(), Arity::integer()) ->
 %%     {ok, func_form()} | {error, not_found}
 get_func(Module, FuncName, Arity) when is_atom(Module) ->
@@ -399,8 +399,8 @@ get_func(Module, FuncName, Arity) when is_atom(Module) ->
 	Err ->
 	    Err
     end;
-get_func(MetaCtx, FuncName, Arity) ->
-    get_func2(MetaCtx#meta_ctx.forms, FuncName, Arity).
+get_func(MetaMod, FuncName, Arity) ->
+    get_func2(MetaMod#meta_mod.forms, FuncName, Arity).
 
 get_func2([], _FuncName, _Arity) ->
     {error, not_found};
@@ -412,48 +412,49 @@ get_func2([_Form|Rest], FuncName, Arity) ->
 
 
 %% Replace an existing function with the new one. If the function doesn't exist
-%% the new function is simply added to the module. This function basically calls
-%% smerl:remove_func followed by smerl:add_func.
+%% the new function is added to the MetaMod object.
+%% This function calls smerl:remove_func followed by smerl:add_func.
 %%
-%% @spec replace_func(MetaCtx::meta_ctx(), Function::string() | func_form()) ->
-%%   {ok, NewCtx::meta_ctx()} | {error, Error}
-replace_func(MetaCtx, Function) when is_list(Function) ->
+%% @spec replace_func(MetaMod::meta_mod(), Function::string() | func_form()) ->
+%%   {ok, NewMod::meta_mod()} | {error, Error}
+replace_func(MetaMod, Function) when is_list(Function) ->
     case parse_func_string(Function) of
 	{ok, Form} ->
-	    replace_func(MetaCtx, Form);
+	    replace_func(MetaMod, Form);
 	Err ->
 	    Err
     end;
-replace_func(MetaCtx, {function, _Line, FuncName, Arity, _Clauses} = Form) ->
-    Ctx1 = remove_func(MetaCtx, FuncName, Arity),
-    add_func(Ctx1, Form);
-replace_func(_MetaCtx, _) ->
+replace_func(MetaMod, {function, _Line, FuncName, Arity, _Clauses} = Form) ->
+    Mod1 = remove_func(MetaMod, FuncName, Arity),
+    add_func(Mod1, Form);
+replace_func(_MetaMod, _) ->
     {error, parse_error}.
 
-%% @doc Simliar to replace_func/2, but accepts a function name + fun expression.
+%% @doc Simliar to replace_func/2, but accepts a function
+%%   name + fun expression.
 %%
-%% @spec replace_func(MetaCtx::meta_ctx(), Name::atom(), Fun::function()) ->
-%%   {ok, NewCtx::meta_ctx()} | {error, Error}
-replace_func(MetaCtx, Name, Fun) when is_function(Fun) ->
+%% @spec replace_func(MetaMod::meta_mod(), Name::atom(), Fun::function()) ->
+%%   {ok, NewMod::meta_mod()} | {error, Error}
+replace_func(MetaMod, Name, Fun) when is_function(Fun) ->
     case form_for_fun(Name, Fun) of
 	{ok, Form} ->
-	    replace_func(MetaCtx, Form);
+	    replace_func(MetaMod, Form);
 	Err ->
 	    Err
     end.
 	    
     
 
-%% @doc Compile the module represented by the given context record.
+%% @doc Compile the module represented by the MetaMod object.
 %% You should call this function once you're done manipulating your
-%% module and you're ready to deploy the changes into the system.
+%% module and you're ready to deploy the changes into the VM in runtime.
 %%
-%% @spec compile(MetaCtx::meta_ctx()) -> ok | {error, Error}
-compile(MetaCtx) ->
-    Forms = [{attribute, 1, module, MetaCtx#meta_ctx.module},
+%% @spec compile(MetaMod::meta_mod()) -> ok | {error, Error}
+compile(MetaMod) ->
+    Forms = [{attribute, 1, module, MetaMod#meta_mod.module},
 	     {attribute, 2, export, lists:reverse(
-				      MetaCtx#meta_ctx.exports)}] ++
-	     lists:reverse(MetaCtx#meta_ctx.forms),
+				      MetaMod#meta_mod.exports)}] ++
+	     lists:reverse(MetaMod#meta_mod.forms),
     case compile:forms(Forms,
 		       [report_errors, report_warnings]) of
 	{ok, Module, Bin} ->
@@ -512,20 +513,20 @@ curry({function, Line, Name, Arity, Clauses}, NewParams) ->
 %%    {ok, NewForm} | {error, Err}
 curry(ModName, Name, Arity, Params) when is_atom(ModName) ->
     case for_module(ModName) of
-	{ok, MetaCtx} ->
-	    curry(MetaCtx, Name, Arity, Params);
+	{ok, MetaMod} ->
+	    curry(MetaMod, Name, Arity, Params);
 	Err ->
 	    Err
     end;
 
-%% @doc Curry the given function from the MetaCtx object with
+%% @doc Curry the given function from the MetaMod object with
 %%  the given param(s)
 %%
-%% @spec curry(MetaCtx::meta_ctx(), Name::atom(), arity::integer(),
+%% @spec curry(MetaMod::meta_mod(), Name::atom(), arity::integer(),
 %%   Params::term() | list()) ->
 %%    {ok, NewForm} | {error, Err}
-curry(MetaCtx, Name, Arity, Params) ->
-    case get_func(MetaCtx, Name, Arity) of
+curry(MetaMod, Name, Arity, Params) ->
+    case get_func(MetaMod, Name, Arity) of
 	{ok, Form} ->
 	    curry(Form, Params);
 	Err ->
@@ -534,10 +535,10 @@ curry(MetaCtx, Name, Arity, Params) ->
 
 
 
-%% @doc Curry the given function from the given module or MetaCtx
+%% @doc Curry the given function from the given module or MetaMod
 %%  object with the given param(s), and return its renamed form.
 %%
-%% @spec curry(Module::atom() | meta_ctx(), Name::atom(), arity::integer(),
+%% @spec curry(Module::atom() | meta_mod(), Name::atom(), arity::integer(),
 %%   Params::term() | list()) ->
 %%    {ok, NewForm} | {error, Err}
 curry(Module, Name, Arity, Params, NewName) ->
@@ -550,66 +551,66 @@ curry(Module, Name, Arity, Params, NewName) ->
 		    
 
 %% @doc Add the curried form for the  given function in the
-%%   MetaCtx object with its curried form.
+%%   MetaMod object with its curried form.
 %%
-%% @spec curry_add(MetaCtx::meta_ctx(), Form::func_form(),
+%% @spec curry_add(MetaMod::meta_mod(), Form::func_form(),
 %%   Params::term() | list()) ->
-%%    {ok, NewMetaCtx::meta_ctx()} | {error, Err}
-curry_add(MetaCtx, {function, _Line, Name, Arity, _Clauses}, Params) ->
-    curry_add(MetaCtx, Name, Arity, Params).
+%%    {ok, NewMetaMod::meta_mod()} | {error, Err}
+curry_add(MetaMod, {function, _Line, Name, Arity, _Clauses}, Params) ->
+    curry_add(MetaMod, Name, Arity, Params).
 
 %% @doc Add the curried form for the given function name and arity
-%%   in the MetaCtx object with its curried form.
+%%   in the MetaMod object with its curried form.
 %%
-%% @spec curry_add(MetaCtx::meta_ctx(), Form::func_form(),
+%% @spec curry_add(MetaMod::meta_mod(), Form::func_form(),
 %%   Params::term() | list()) ->
-%%    {ok, NewMetaCtx::meta_ctx()} | {error, Err}
-curry_add(MetaCtx, Name, Arity, Params) ->
-    curry_change(MetaCtx, Name, Arity, Params, false).
+%%    {ok, NewMetaMod::meta_mod()} | {error, Err}
+curry_add(MetaMod, Name, Arity, Params) ->
+    curry_change(MetaMod, Name, Arity, Params, false).
 
 %% @doc Add the curried form for the function from the given module
-%%   to the MetaCtx object.
+%%   to the MetaMod object.
 %%
-%% @spec curry_add(MetaCtx::meta_ctx(), Module::atom(), Name::atom(),
+%% @spec curry_add(MetaMod::meta_mod(), Module::atom(), Name::atom(),
 %%   Arity::integer(), Params::term() | list()) ->
-%%     {ok, NewCtx::meta_ctx()} | {error, Err}
-curry_add(MetaCtx, Module, Name, Arity, Params) ->
+%%     {ok, NewMod::meta_mod()} | {error, Err}
+curry_add(MetaMod, Module, Name, Arity, Params) ->
     case curry(Module, Name, Arity, Params) of
 	{ok, Form} ->
-	    add_func(MetaCtx, Form);	    
+	    add_func(MetaMod, Form);	    
 	Err ->
 	    Err
     end.
 
 %% @doc Curry the function with the given name
 %%   and arity in the given module, rename the curried form, and
-%%   add it to the MetaCtx object.
+%%   add it to the MetaMod object.
 %%
-%% @spec curry_add(MetaCtx::meta_ctx(), Module:atom(),
+%% @spec curry_add(MetaMod::meta_mod(), Module:atom(),
 %%   Name::atom(), Arity::integer(), Params::term() | list(),
 %%   NewName::atom()) ->
-%%     {ok, NewCtx::meta_ctx()} | {error, Error}
-curry_add(MetaCtx, Module, Name, Arity, Params, NewName) ->
+%%     {ok, NewMod::meta_mod()} | {error, Error}
+curry_add(MetaMod, Module, Name, Arity, Params, NewName) ->
     case curry(Module, Name, Arity, Params, NewName) of
 	{ok, Form} ->
-	    add_func(MetaCtx, Form);
+	    add_func(MetaMod, Form);
 	Err ->
 	    Err
     end.
 
-curry_change(MetaCtx, Name, Arity, Params, Remove) ->
-    case get_func(MetaCtx, Name, Arity) of
+curry_change(MetaMod, Name, Arity, Params, Remove) ->
+    case get_func(MetaMod, Name, Arity) of
         {ok, OldForm} ->
             case curry(OldForm, Params) of
                 {ok, NewForm} ->
-		    MetaCtx1 =
+		    MetaMod1 =
 			case Remove of
 			    true ->
-				remove_func(MetaCtx, Name, Arity);
+				remove_func(MetaMod, Name, Arity);
 			    false ->
-				MetaCtx
+				MetaMod
 			end,
-		    add_func(MetaCtx1, NewForm);
+		    add_func(MetaMod1, NewForm);
 		Err ->
 		    Err
             end;
@@ -617,21 +618,21 @@ curry_change(MetaCtx, Name, Arity, Params, Remove) ->
             Err
     end.
 
-%% @doc Replace the given function in the MetaCtx object with
+%% @doc Replace the given function in the MetaMod object with
 %%   its curried form.
 %%
-%% @spec curry_replace(MetaCtx::meta_ctx(), Form::func_form(),
+%% @spec curry_replace(MetaMod::meta_mod(), Form::func_form(),
 %%   Params::term() | list()) ->
-%%    {ok, NewMetaCtx::meta_ctx()} | {error, Err}
-curry_replace(MetaCtx, {function, _Line, Name, Arity, _Clauses}, Params) ->
-    curry_replace(MetaCtx, Name, Arity, Params).
+%%    {ok, NewMetaMod::meta_mod()} | {error, Err}
+curry_replace(MetaMod, {function, _Line, Name, Arity, _Clauses}, Params) ->
+    curry_replace(MetaMod, Name, Arity, Params).
 
 
-%% @doc Replace the given function in the MetaCtx object with
+%% @doc Replace the given function in the MetaMod object with
 %%   its curried form.
 %%
-%% @spec curry_replace(MetaCtx::meta_ctx(), name::string(),
+%% @spec curry_replace(MetaMod::meta_mod(), name::string(),
 %%   Arity::integer(), Params::term() | list()) ->
-%%    {ok, NewMetaCtx::meta_ctx()} | {error, Err}
-curry_replace(MetaCtx, Name, Arity, Params) ->
-    curry_change(MetaCtx, Name, Arity, Params, true).
+%%    {ok, NewMetaMod::meta_mod()} | {error, Err}
+curry_replace(MetaMod, Name, Arity, Params) ->
+    curry_change(MetaMod, Name, Arity, Params, true).
