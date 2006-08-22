@@ -117,7 +117,9 @@
          get_module/1,
 	 set_module/2,
          get_forms/1,
+	 set_forms/2,
          get_exports/1,
+	 set_exports/2,
 	 remove_export/3,
 	 add_func/2,
 	 add_func/3,
@@ -197,11 +199,21 @@ for_file(SrcFilePath) ->
 get_module(MetaMod) -> 
     MetaMod#meta_mod.module.
 
+%% @doc Set the MetaMod object's module name to the new name.
+%%
+%% @spec set_module(MetaMod::meta_mod(), NewName::atom()) ->
+%%   NewMod::meta_mod()
+set_module(MetaMod, NewName) ->
+    MetaMod#meta_mod{module = NewName}.
+
 %% @doc Return the list of function forms in the MetaMod object.
 %%
 %% @spec get_forms(MetaMod::meta_mod()) -> list()
 get_forms(MetaMod) ->
     MetaMod#meta_mod.forms.
+
+set_forms(MetaMod, Forms) ->
+    MetaMod#meta_mod{forms = Forms}.
 
 %% @doc Return the list of exports in the MetaMod object.
 %%
@@ -209,12 +221,8 @@ get_forms(MetaMod) ->
 get_exports(MetaMod) ->
     MetaMod#meta_mod.exports.
 
-%% @doc Set the MetaMod object's module name to the new name.
-%%
-%% @spec set_module(MetaMod::meta_mod(), NewName::atom()) ->
-%%   NewMod::meta_mod()
-set_module(MetaMod, NewName) ->
-    MetaMod#meta_mod{module = NewName}.
+set_exports(MetaMod, Exports) ->
+    MetaMod#meta_mod{exports = Exports}.
 
 %% @doc Remove the given export from the list of exports in the MetaMod object.
 %%
