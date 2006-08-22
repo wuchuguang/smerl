@@ -137,7 +137,8 @@
 	 curry_add/5,
 	 curry_add/6,
 	 curry_replace/3,
-	 curry_replace/4
+	 curry_replace/4,
+	 embed_params/2
 	]).
 
 -define(L(Obj), io:format("LOG ~w ~p\n", [?LINE, Obj])).
@@ -489,20 +490,20 @@ curry({function, _Line, _Name, Arity, _Clauses}, Params)
 curry({function, Line, Name, Arity, Clauses}, NewParams) ->
     NewClauses =
 	lists:foldl(
-	  fun({clause, L1, ExistingParams, _Guards, Exprs},
-	      Clauses1) ->
-		  {FirstParams, LastParams} =
-		      lists:split(length(NewParams), ExistingParams),
-		  ZippedParams = lists:zip(FirstParams, NewParams),
-		  Matches =
-		      lists:foldl(
-			fun({Var, NewVal}, Acc) ->
-				[{match,1,Var, erl_parse:abstract(NewVal)} | Acc]
-			end, [], ZippedParams),
-		  [{clause, L1, LastParams, _Guards,
-		   Matches ++ Exprs} | Clauses1]
+	  fun(Clause, Clauses1) ->
+		  [curry_clause(Clause, NewParams) | Clauses1]
 	  end, [], Clauses),
     {ok, {function, Line, Name, Arity-length(NewParams), NewClauses}}.
+
+curry_clause({clause, L1, ExistingParams, Guards, Exprs}, NewParams) ->
+    {FirstParams, LastParams} =
+	lists:split(length(NewParams), ExistingParams),
+    Matches =
+	lists:foldl(
+	  fun({Var, NewVal}, Acc) ->
+		  [{match, 1, Var, erl_parse:abstract(NewVal)} | Acc]
+	  end, [], lists:zip(FirstParams, NewParams)),
+    {clause, L1, LastParams, Guards, Matches ++ Exprs}.
 
 
 %% @doc Curry the given function from the given module with
@@ -636,3 +637,40 @@ curry_replace(MetaMod, {function, _Line, Name, Arity, _Clauses}, Params) ->
 %%    {ok, NewMetaMod::meta_mod()} | {error, Err}
 curry_replace(MetaMod, Name, Arity, Params) ->
     curry_change(MetaMod, Name, Arity, Params, true).
+
+
+%% @doc Embed all parameters that match a Name element of the list of
+%%  {Name, Value} pairs in the body of the function by setting them
+%%  to the Value element.
+%%
+%% @spec embed_params(Func::func_form(),
+%%   Vals::[{Name::atom(), Value:term()}]) -> NewForm::func_form()}
+embed_params({function, L, Name, Arity, Clauses}, Vals) ->
+    NewClauses =
+	lists:foldl(
+	  fun({clause, L1, Params, Guards, Exprs}, Clauses1) ->
+		  {Params1, Matches1, _RemainingVals} =
+		      lists:foldl(
+			fun({var, _L2, ParamName} = Param,
+			    {Params2, Matches2, Vals1}) ->
+				case lists:keysearch(ParamName, 1, Vals1) of 
+				    {value, {_Name, Val} = Elem} ->
+					Match = {match, L1, Param, Val},
+					{Params2, [Match | Matches2],
+					 lists:delete(Elem, Vals1)};
+				    false ->
+					{[Param | Params2], Matches2, Vals1}
+				end
+			end, {[], [], Vals}, Params),
+		  [{clause, L1, lists:reverse(Params1), Guards,
+				lists:reverse(Matches1) ++ Exprs} | Clauses1]
+	  end, [], Clauses),
+    NewArity =
+	case NewClauses of
+	    [{clause, _L2, Params, _Guards, _Exprs}|_] ->
+		length(Params);
+	    _ ->
+		Arity
+	end,
+    {function, L, Name, NewArity, lists:reverse(NewClauses)}.
+
