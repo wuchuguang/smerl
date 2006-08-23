@@ -141,7 +141,8 @@
 	 curry_replace/3,
 	 curry_replace/4,
 	 embed_params/2,
-	 embed_all/2
+	 embed_all/2,
+	 extend/2
 	]).
 
 -define(L(Obj), io:format("LOG ~w ~p\n", [?LINE, Obj])).
@@ -401,7 +402,7 @@ has_func(MetaMod, FuncName, Arity) ->
 %% 
 %% @spec get_func(MetaMod::meta_mod() | Module::atom(),
 %%   FuncName::atom(), Arity::integer()) ->
-%%     {ok, func_form()} | {error, not_found}
+%%     {ok, func_form()} | {error, function_not_found}
 get_func(Module, FuncName, Arity) when is_atom(Module) ->
     case smerl:for_module(Module) of
 	{ok, C1} ->
@@ -413,7 +414,7 @@ get_func(MetaMod, FuncName, Arity) ->
     get_func2(MetaMod#meta_mod.forms, FuncName, Arity).
 
 get_func2([], _FuncName, _Arity) ->
-    {error, not_found};
+    {error, function_not_found};
 get_func2([{function, _Line, FuncName, Arity, _Clauses} = Form | _Rest], FuncName, Arity) ->
     {ok, Form};
 get_func2([_Form|Rest], FuncName, Arity) ->		      
@@ -717,3 +718,53 @@ embed_all(MetaMod, Vals) ->
     #meta_mod{module = get_module(MetaMod),
 	      exports = Exports3 ++ NewExports1,
 	      forms = NewForms1}.
+
+
+
+%% @doc extend/2 allows you to create child modules from parent modules.
+%% All exported functions that are unique to the parent module are
+%% added to the child module in the form of remote function calls
+%% to the parent module.
+%%
+%% @spec extend(Base::atom() | meta_mod(), Child:atom() | meta_mod()) ->
+%%   NewChildMod::meta_mod()
+extend(Base, Child) when is_atom(Base)->
+    case for_module(Base) of
+	{ok, MetaMod} ->
+	    extend(MetaMod, Child);
+	Err ->
+	    Err
+    end;
+extend(ParentMod, Child) when is_atom(Child) ->
+    case for_module(Child) of
+	{ok, ChildMod} ->
+	    extend(ParentMod, ChildMod);
+	Err ->
+	    Err
+    end;
+extend(ParentMod, ChildMod) ->
+    ParentExports = get_exports(ParentMod),
+    ChildExports = get_exports(ChildMod),
+    ExportsDiff = ParentExports -- ChildExports,
+    lists:foldl(
+      fun({FuncName, Arity}, ChildMod1) ->
+	      List = lists:seq(1, Arity),
+	      Params =
+		  lists:foldl(
+		    fun(Num, Acc) ->
+			    [{var,1,
+			      list_to_atom("P" ++
+					   integer_to_list(
+					     Num + 1))} | Acc]
+		    end, [], List),
+	      Func =
+		  {function,1,FuncName,Arity,
+		   [{clause,1,Params,[],
+		     [{call,1,
+		       {remote,1,{atom,1,get_module(ParentMod)},
+			{atom,1,FuncName}},
+		       Params}]}
+		   ]},
+	      {ok, ChildMod2} = add_func(ChildMod1, Func),
+	      ChildMod2
+      end, ChildMod, ExportsDiff).
