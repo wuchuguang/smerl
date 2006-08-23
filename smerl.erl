@@ -142,7 +142,8 @@
 	 curry_replace/4,
 	 embed_params/2,
 	 embed_all/2,
-	 extend/2
+	 extend/2,
+	 to_src/1
 	]).
 
 -define(L(Obj), io:format("LOG ~w ~p\n", [?LINE, Obj])).
@@ -747,8 +748,9 @@ extend(ParentMod, Child) when is_atom(Child) ->
 extend(ParentMod, ChildMod) ->
     ParentExports = get_exports(ParentMod),
     ChildExports = get_exports(ChildMod),
+    ParentModule = get_module(ParentMod),
     ExportsDiff = ParentExports -- ChildExports,
-    lists:foldl(
+    NewChild = lists:foldl(
       fun({FuncName, Arity}, ChildMod1) ->
 	      {ok, {function, _L, _Name, _Arity,
 		    [{clause, _L1, Params, _Guards, _Exprs}]}} =
@@ -757,10 +759,26 @@ extend(ParentMod, ChildMod) ->
 		  {function,1,FuncName,Arity,
 		   [{clause,1,Params,[],
 		     [{call,1,
-		       {remote,1,{atom,1,get_module(ParentMod)},
+		       {remote,1,{atom,1,ParentModule},
 			{atom,1,FuncName}},
 		       Params}]}
 		   ]},
 	      {ok, ChildMod2} = add_func(ChildMod1, Func),
 	      ChildMod2
-      end, ChildMod, ExportsDiff).
+      end, ChildMod, ExportsDiff),
+    {ok, NewChild1} =
+	smerl:add_func(
+	  NewChild, "parent()->" ++ atom_to_list(ParentModule) ++ "."),
+    NewChild1.
+
+
+%% @doc Return the pretty-printed source code for this module.
+%% 
+%% @spec to_src(MetaMod::meta_mod()) -> soure::string()
+to_src(MetaMod) ->
+    ExportsForm =
+	{attribute,1,export,get_exports(MetaMod)},
+    AllForms = [{attribute,1,module,get_module(MetaMod)}, ExportsForm |
+      get_forms(MetaMod)],
+    erl_prettypr:format(erl_syntax:form_list(AllForms)).
+		  
