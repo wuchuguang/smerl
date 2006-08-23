@@ -402,7 +402,7 @@ has_func(MetaMod, FuncName, Arity) ->
 %% 
 %% @spec get_func(MetaMod::meta_mod() | Module::atom(),
 %%   FuncName::atom(), Arity::integer()) ->
-%%     {ok, func_form()} | {error, function_not_found}
+%%     {ok, func_form()} | {error, Err}
 get_func(Module, FuncName, Arity) when is_atom(Module) ->
     case smerl:for_module(Module) of
 	{ok, C1} ->
@@ -413,8 +413,8 @@ get_func(Module, FuncName, Arity) when is_atom(Module) ->
 get_func(MetaMod, FuncName, Arity) ->
     get_func2(MetaMod#meta_mod.forms, FuncName, Arity).
 
-get_func2([], _FuncName, _Arity) ->
-    {error, function_not_found};
+get_func2([], FuncName, Arity) ->
+    {error, {function_not_found, {FuncName, Arity}}};
 get_func2([{function, _Line, FuncName, Arity, _Clauses} = Form | _Rest], FuncName, Arity) ->
     {ok, Form};
 get_func2([_Form|Rest], FuncName, Arity) ->		      
