@@ -143,7 +143,8 @@
 	 embed_params/2,
 	 embed_all/2,
 	 extend/2,
-	 to_src/1
+	 to_src/1,
+	 to_src/2
 	]).
 
 -define(L(Obj), io:format("LOG ~w ~p\n", [?LINE, Obj])).
@@ -782,3 +783,11 @@ to_src(MetaMod) ->
       get_forms(MetaMod)],
     erl_prettypr:format(erl_syntax:form_list(AllForms)).
 		  
+%% @doc Write the pretty printed source code for this module
+%%   to the file with the given file name.
+%%
+%% @sprc to_src(MetaMod::meta_mod(), FileName::string()) ->
+%%   ok | {error, Error}
+to_src(MetaMod, FileName) ->
+    Src = to_src(MetaMod),
+    file:write_file(FileName, list_to_binary(Src)).
