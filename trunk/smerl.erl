@@ -748,15 +748,9 @@ extend(ParentMod, ChildMod) ->
     ExportsDiff = ParentExports -- ChildExports,
     lists:foldl(
       fun({FuncName, Arity}, ChildMod1) ->
-	      List = lists:seq(1, Arity),
-	      Params =
-		  lists:foldl(
-		    fun(Num, Acc) ->
-			    [{var,1,
-			      list_to_atom("P" ++
-					   integer_to_list(
-					     Num + 1))} | Acc]
-		    end, [], List),
+	      {ok, {function, _L, _Name, _Arity,
+		    [{clause, _L1, Params, _Guards, _Exprs}]}} =
+		  get_func(ParentMod, FuncName, Arity),
 	      Func =
 		  {function,1,FuncName,Arity,
 		   [{clause,1,Params,[],
