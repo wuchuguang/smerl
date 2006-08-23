@@ -711,7 +711,9 @@ embed_all(MetaMod, Vals) ->
 			  false ->
 			      [{Name, NewArity} | NewExports1]
 		      end,
-		  {[NewForm | Forms1], Exports2, NewExports2} 
+		  {[NewForm | Forms1], Exports2, NewExports2};
+	     (_, Acc) ->
+		  Acc
 	  end, {[], Exports, []}, Forms),
     {NewForms1, NewExports1} =
 	{NewForms, NewExports},
