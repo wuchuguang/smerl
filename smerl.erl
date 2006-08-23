@@ -120,6 +120,8 @@
 	 set_forms/2,
          get_exports/1,
 	 set_exports/2,
+	 get_export_all/1,
+	 set_export_all/2,
 	 remove_export/3,
 	 add_func/2,
 	 add_func/3,
@@ -155,7 +157,7 @@
 %%    in the ERTS Users' manual.
 
 %% The record type holding the abstract representation for a module.
--record(meta_mod, {module, exports = [], forms = []}).
+-record(meta_mod, {module, exports = [], forms = [], export_all = false}).
 
 %% @doc Create a record for a new module with the given module name.
 %%
@@ -195,6 +197,27 @@ for_file(SrcFilePath) ->
 	    {error, invalid_module}
     end.
 
+mod_for_forms([_FileAttribute, {attribute, _, module, ModuleName}|Forms]) ->
+    {Exports, OtherForms, ExportAll} =
+	lists:foldl(
+	  fun({attribute, _, export, ExportList},
+	      {ExportsAcc, FormsAcc, ExportAll}) ->
+		  {ExportList ++ ExportsAcc, FormsAcc, ExportAll};
+	     ({attribute, _, compile, export_all},
+	      {ExportsAcc, FormsAcc, _ExportAll}) ->
+		     {ExportsAcc, FormsAcc, true};
+	     ({eof, _}, Acc) ->
+		  Acc;
+	     (Form, {ExportsAcc, FormsAcc, ExportAll}) ->
+		  {ExportsAcc, [Form | FormsAcc], ExportAll}
+	  end, {[], [], false}, Forms),
+    {ok, #meta_mod{module = ModuleName,
+		   exports = Exports,
+		   forms = OtherForms,
+		   export_all = ExportAll
+		  }};
+mod_for_forms(_) ->
+    {error, invalid_module}.
 
 %% @doc Return the module name for the MetaMod object.
 %%
@@ -211,7 +234,7 @@ set_module(MetaMod, NewName) ->
 
 %% @doc Return the list of function forms in the MetaMod object.
 %%
-%% @spec get_forms(MetaMod::meta_mod()) -> list()
+%% @spec get_forms(MetaMod::meta_mod()) -> [Form]
 get_forms(MetaMod) ->
     MetaMod#meta_mod.forms.
 
@@ -220,12 +243,40 @@ set_forms(MetaMod, Forms) ->
 
 %% @doc Return the list of exports in the MetaMod object.
 %%
-%% @spec get_exports(MetaMod::meta_mod()) -> list()
+%% @spec get_exports(MetaMod::meta_mod()) ->
+%%   [{FuncName::atom(), Arity::integer()}]
 get_exports(MetaMod) ->
-    MetaMod#meta_mod.exports.
+    case MetaMod#meta_mod.export_all of
+	false ->
+	    MetaMod#meta_mod.exports;
+	true ->
+	    lists:foldl(
+	      fun({function, _L, Name, Arity, _Clauses}, Exports) ->
+		      [{Name, Arity} | Exports];	      
+		 (_Form, Exports) ->
+		      Exports
+	      end, [], MetaMod#meta_mod.forms)
+    end.
 
+%% @doc Set the export list to the given list.
+%%
+%% @spec set_exports(MetaMod::meta_mod(),
+%%   Exports::[{FuncName::atom(), Arity::integer()}]
 set_exports(MetaMod, Exports) ->
     MetaMod#meta_mod{exports = Exports}.
+
+%% @doc Get the export_all value for the module.
+%%
+%% @spec get_export_all(MetaMod::meta_mod) -> true | false
+get_export_all(MetaMod) ->
+    MetaMod#meta_mod.export_all.
+
+%% @doc Set the export_all value for the module.
+%%
+%% @spec set_export_all(MetaMod::meta_mod(), Val::true | false) ->
+%%   NewMetaMod::meta_mod()
+set_export_all(MetaMod, Val) ->
+    MetaMod#meta_mod{export_all = Val}.
 
 %% @doc Remove the given export from the list of exports in the MetaMod object.
 %%
@@ -235,24 +286,6 @@ remove_export(MetaMod, FuncName, Arity) ->
     MetaMod#meta_mod{exports =
 		     lists:delete({FuncName, Arity},
 			     MetaMod#meta_mod.exports)}.
-
-mod_for_forms([_FileAttribute, {attribute, _, module, ModuleName}|Forms]) ->
-    {Exports, OtherForms} =
-	lists:foldl(
-	  fun({attribute, _, export, ExportList},
-	      {ExportsAcc, OtherAcc}) ->
-		  {ExportList ++ ExportsAcc, OtherAcc};
-	     ({eof, _}, Acc) ->
-		  Acc;
-	     (Form, {ExportsAcc, OtherAcc}) ->
-		  {ExportsAcc, [Form | OtherAcc]}
-	  end, {[], []}, Forms),
-    {ok, #meta_mod{module = ModuleName,
-		   exports = Exports,
-		   forms = OtherForms
-		  }};
-mod_for_forms(_) ->
-    {error, invalid_module}.
 
 %% Get the abstract representation, if available, for the module.
 %%
@@ -721,7 +754,8 @@ embed_all(MetaMod, Vals) ->
 	{NewForms, NewExports},
     #meta_mod{module = get_module(MetaMod),
 	      exports = Exports3 ++ NewExports1,
-	      forms = NewForms1}.
+	      forms = NewForms1,
+	      export_all = get_export_all(MetaMod)}.
 
 
 
