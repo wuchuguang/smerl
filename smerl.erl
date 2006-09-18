@@ -622,8 +622,8 @@ curry_add(MetaMod, Name, Arity, Params) ->
 %% @doc Add the curried form for the function from the given module
 %%   to the MetaMod object.
 %%
-%% @spec curry_add(MetaMod::meta_mod(), Module::atom(), Name::atom(),
-%%   Arity::integer(), Params::term() | list()) ->
+%% @spec curry_add(MetaMod::meta_mod(), Module::atom() | meta_mod(),
+%%   Name::atom(), Arity::integer(), Params::term() | list()) ->
 %%     {ok, NewMod::meta_mod()} | {error, Err}
 curry_add(MetaMod, Module, Name, Arity, Params) ->
     case curry(Module, Name, Arity, Params) of
