@@ -7,7 +7,8 @@
 %%   <p>Smerl uses Erlang's capabilities for hot code swapping and
 %%   abstract syntax tree parsing to do its magic. Smerl is inspired by
 %%   the rdbms_codegen.erl module in the RDBMS application written by
-%%   Ulf Wiger. RDBMS is part of <a href="http://jungerl.sf.net">Jungerl</a>.</p>
+%%   Ulf Wiger. RDBMS is part of <a href="http://jungerl.sf.net">Jungerl</a>.
+%%   </p>
 %%
 %%   <p>Here's a quick example illustrating how to use Smerl:</p>
 %%   ``
@@ -50,13 +51,13 @@
 %%   you can create a new module from an Erlang source file.</p>
 %%
 %%   <p>smerl:new, smerl:for_module and smerl:for_file return an
-%%   MetaMod object for the module. To manipulate the module,
+%%   MetaMod record for the module. To manipulate the module,
 %%   use smerl:add_func and smerl:remove_func. Just remember not to
 %%   add the same function name with the same arity twice as it will
 %%   eventually result in a compilation error.</p>
 %%
 %%   <p>When you're ready to compile your module, call smerl:compile,
-%%   passing in the MetaMod object. If there are no errors,
+%%   passing in the MetaMod record. If there are no errors,
 %%   you can start using the new module.</p>
 %%
 %%   <p>New capabilities (8/16/06):</p>
@@ -67,7 +68,8 @@
 %%   <p>New capabilities (8/17/06):</p>
 %%   <p>smerl:add_func and smerl:replace_func can now accept fun expressions
 %%   as parameters. <b>This only works in the Erlang shell at the moment</b>.
-%%   With fun expressions, you longer have to rely on source strings and abstract
+%%   With fun expressions, you longer have to rely on source strings and
+%%   abstract
 %%   forms to add behaviour to a module. Even closures are supported. Closure
 %%   variables are expanded in the beginning the function. Example:
 %%
@@ -162,7 +164,7 @@
 new(ModuleName) when is_atom(ModuleName) ->
     #meta_mod{module = ModuleName}.
 
-%% @doc Create a MetaMod object for manipulating an existing module.
+%% @doc Create a MetaMod record for manipulating an existing module.
 %%
 %% @spec for_module(ModuleName::atom() || string()) ->
 %%   {ok, meta_mod()} | {error, Error}
@@ -189,7 +191,7 @@ for_module(ModuleName) when is_atom(ModuleName) ->
 	    end
     end.
 
-%% @doc Create a MetaMod object for a module described in the given source
+%% @doc Create a MetaMod record for a module from its source
 %% file.
 %%
 %% @spec for_file(SrcFilePath::string()) -> {ok, meta_mod()} |
@@ -224,20 +226,20 @@ mod_for_forms([_FileAttribute, {attribute, _, module, ModuleName}|Forms]) ->
 mod_for_forms(_) ->
     {error, invalid_module}.
 
-%% @doc Return the module name for the MetaMod object.
+%% @doc Return the module name for the MetaMod record.
 %%
 %% @spec(MetaMod::meta_mod()) -> atom()
 get_module(MetaMod) -> 
     MetaMod#meta_mod.module.
 
-%% @doc Set the MetaMod object's module name to the new name.
+%% @doc Set the MetaMod record's module name to the new name.
 %%
 %% @spec set_module(MetaMod::meta_mod(), NewName::atom()) ->
 %%   NewMod::meta_mod()
 set_module(MetaMod, NewName) ->
     MetaMod#meta_mod{module = NewName}.
 
-%% @doc Return the list of function forms in the MetaMod object.
+%% @doc Return the list of function forms in the MetaMod record.
 %%
 %% @spec get_forms(MetaMod::meta_mod()) -> [Form]
 get_forms(MetaMod) ->
@@ -246,7 +248,7 @@ get_forms(MetaMod) ->
 set_forms(MetaMod, Forms) ->
     MetaMod#meta_mod{forms = Forms}.
 
-%% @doc Return the list of exports in the MetaMod object.
+%% @doc Return the list of exports in the MetaMod record.
 %%
 %% @spec get_exports(MetaMod::meta_mod()) ->
 %%   [{FuncName::atom(), Arity::integer()}]
@@ -283,7 +285,7 @@ get_export_all(MetaMod) ->
 set_export_all(MetaMod, Val) ->
     MetaMod#meta_mod{export_all = Val}.
 
-%% @doc Remove the given export from the list of exports in the MetaMod object.
+%% @doc Remove the given export from the list of exports in the MetaMod record.
 %%
 %% @spec remove_export(MetaMod::meta_mod(), FuncName::atom(),
 %%   Arity::integer()) -> NewMod::meta_mod()
@@ -314,17 +316,17 @@ get_forms(Module, Path) ->
 	    end
     end.
 
-%% @doc Add a new function to the MetaMod object and return the new MetaMod
-%%   object. The new function will be added to the module's export list.
+%% @doc Add a new function to the MetaMod record and return the new MetaMod
+%%   record. The new function will be added to the module's export list.
 %%
 %% @spec add_func(MetaMod::meta_mod(), Form::func_form() | string()) ->
 %%   {ok, NewMod::meta_mod()} | {error, parse_error}
 add_func(MetaMod, Form) ->
     add_func(MetaMod, Form, true).
 
-%% @doc Add a new function to the MetaMod object and return the new MetaMod
-%%   object. If Export == false, the function will not be added to the
-%%   MetaMod object's export list.
+%% @doc Add a new function to the MetaMod record and return the new MetaMod
+%%   record. If Export == false, the function will not be added to the
+%%   MetaMod record's export list.
 %%
 %% @spec add_func(MetaMod::meta_mod(), Func::func_form() | string()) ->
 %%   {ok, NewMod::meta_mod()} | {error, parse_error}
@@ -397,9 +399,9 @@ parse_func_string(Func) ->
 	    {error, parse_error}
     end.
 
-%% @doc Try to remove the function from the MetaMod object return the
-%%   resulting MetaMod object.
-%%   If the function isn't found, the original MetaMod object is returned.
+%% @doc Try to remove the function from the MetaMod record return the
+%%   resulting MetaMod record.
+%%   If the function isn't found, the original MetaMod record is returned.
 %%
 %% @spec remove_func(MetaMod::meta_mod(), FuncName::string(), Arity::integer())
 %%   -> NewMod::meta_mod()
@@ -424,7 +426,7 @@ remove_func(MetaMod, FuncName, Arity) ->
 		       end, MetaMod#meta_mod.exports)
 		      }.
 
-%% @doc Inspect whether a MetaMod object has a function with the given name
+%% @doc Check whether a MetaMod record has a function with the given name
 %%   and arity.
 %% @spec has_func(MetaMod::meta_mod(), FuncName::atom(), Arity::integer()) ->
 %%   bool()
@@ -437,8 +439,8 @@ has_func(MetaMod, FuncName, Arity) ->
 	      end, MetaMod#meta_mod.forms).
 
 
-%% @doc Get the form for the function with the given arity in the
-%%   MetaMod object.
+%% @doc Get the form for the function with the specified arity in the
+%%   MetaMod record.
 %% 
 %% @spec get_func(MetaMod::meta_mod() | Module::atom(),
 %%   FuncName::atom(), Arity::integer()) ->
@@ -463,7 +465,7 @@ get_func2([_Form|Rest], FuncName, Arity) ->
 
 
 %% Replace an existing function with the new one. If the function doesn't exist
-%% the new function is added to the MetaMod object.
+%% the new function is added to the MetaMod record.
 %% This function calls smerl:remove_func followed by smerl:add_func.
 %%
 %% @spec replace_func(MetaMod::meta_mod(), Function::string() | func_form()) ->
@@ -496,7 +498,7 @@ replace_func(MetaMod, Name, Fun) when is_function(Fun) ->
 	    
     
 
-%% @doc Compile the module represented by the MetaMod object.
+%% @doc Compile the module represented by the MetaMod record.
 %% You should call this function once you're done manipulating your
 %% module and you're ready to deploy the changes into the VM in runtime.
 %%
@@ -528,7 +530,7 @@ compile(MetaMod) ->
 rename({function, Line, _Name, Arity, Clauses}, NewName) ->
     {function, Line, NewName, Arity, Clauses}.
     
-%% @doc Get the curried form for the given function and parameter
+%% @doc Get the curried form for the function and parameter
 %%
 %% @spec curry(Form::func_form(), Param::term() | list()) ->
 %%   {ok, NewForm::func_form()} | {error, Err}
@@ -556,7 +558,7 @@ curry_clause({clause, L1, ExistingParams, Guards, Exprs}, NewParams) ->
     {clause, L1, LastParams, Guards, Matches ++ Exprs}.
 
 
-%% @doc Curry the given function from the given module with
+%% @doc Curry the function from the module with
 %%  the given param(s)
 %%
 %% @spec curry(ModName::atom(), Name::atom(), arity::integer(),
@@ -570,7 +572,7 @@ curry(ModName, Name, Arity, Params) when is_atom(ModName) ->
 	    Err
     end;
 
-%% @doc Curry the given function from the MetaMod object with
+%% @doc Curry the function from the MetaMod record with
 %%  the given param(s)
 %%
 %% @spec curry(MetaMod::meta_mod(), Name::atom(), arity::integer(),
@@ -586,8 +588,8 @@ curry(MetaMod, Name, Arity, Params) ->
 
 
 
-%% @doc Curry the given function from the given module or MetaMod
-%%  object with the given param(s), and return its renamed form.
+%% @doc Curry the function from the module or MetaMod
+%%  record with the param(s), and return its renamed form.
 %%
 %% @spec curry(Module::atom() | meta_mod(), Name::atom(), arity::integer(),
 %%   Params::term() | list()) ->
@@ -601,8 +603,8 @@ curry(Module, Name, Arity, Params, NewName) ->
     end.
 		    
 
-%% @doc Add the curried form for the  given function in the
-%%   MetaMod object with its curried form.
+%% @doc Add the curried form of the function in the
+%%   MetaMod record with its curried form.
 %%
 %% @spec curry_add(MetaMod::meta_mod(), Form::func_form(),
 %%   Params::term() | list()) ->
@@ -610,8 +612,8 @@ curry(Module, Name, Arity, Params, NewName) ->
 curry_add(MetaMod, {function, _Line, Name, Arity, _Clauses}, Params) ->
     curry_add(MetaMod, Name, Arity, Params).
 
-%% @doc Add the curried form for the given function name and arity
-%%   in the MetaMod object with its curried form.
+%% @doc Add the curried form of the function
+%%   in the MetaMod record with its curried form.
 %%
 %% @spec curry_add(MetaMod::meta_mod(), Form::func_form(),
 %%   Params::term() | list()) ->
@@ -619,25 +621,19 @@ curry_add(MetaMod, {function, _Line, Name, Arity, _Clauses}, Params) ->
 curry_add(MetaMod, Name, Arity, Params) ->
     curry_change(MetaMod, Name, Arity, Params, false).
 
-%% @doc Add the curried form for the function from the given module
-%%   to the MetaMod object.
+%% @doc Curry the function form from the given MetaMod, then add it
+%%   to the MetaMod with the new name.
 %%
-%% @spec curry_add(MetaMod::meta_mod(), Module::atom() | meta_mod(),
-%%   Name::atom(), Arity::integer(), Params::term() | list()) ->
-%%     {ok, NewMod::meta_mod()} | {error, Err}
-curry_add(MetaMod, Module, Name, Arity, Params) ->
-    case curry(Module, Name, Arity, Params) of
-	{ok, Form} ->
-	    add_func(MetaMod, Form);	    
-	Err ->
-	    Err
-    end.
-
-%% @doc Curry the function with the given name
-%%   and arity in the given module, rename the curried form, and
-%%   add it to the MetaMod object.
+%% @spec curry_add(MetaMod::meta_mod(), Name::atom(), Arity::integer(),
+%%   Params::[term()], NewName::atom()) -> {ok, NewMod::meta_mod()} |
+%%     {error, Err}
+curry_add(MetaMod, Name, Arity, Params, NewName) ->
+    curry_add(MetaMod, MetaMod, Name, Arity, Params, NewName).
+    
+%% @doc Curry the function in the module, rename the curried form, and
+%%   add it to the MetaMod record.
 %%
-%% @spec curry_add(MetaMod::meta_mod(), Module:atom(),
+%% @spec curry_add(MetaMod::meta_mod(), Module:atom() | meta_mod(),
 %%   Name::atom(), Arity::integer(), Params::term() | list(),
 %%   NewName::atom()) ->
 %%     {ok, NewMod::meta_mod()} | {error, Error}
@@ -669,7 +665,7 @@ curry_change(MetaMod, Name, Arity, Params, Remove) ->
             Err
     end.
 
-%% @doc Replace the given function in the MetaMod object with
+%% @doc Replace the function in the MetaMod record with
 %%   its curried form.
 %%
 %% @spec curry_replace(MetaMod::meta_mod(), Form::func_form(),
@@ -679,7 +675,7 @@ curry_replace(MetaMod, {function, _Line, Name, Arity, _Clauses}, Params) ->
     curry_replace(MetaMod, Name, Arity, Params).
 
 
-%% @doc Replace the given function in the MetaMod object with
+%% @doc Replace the function in the MetaMod record with
 %%   its curried form.
 %%
 %% @spec curry_replace(MetaMod::meta_mod(), name::string(),
@@ -728,8 +724,8 @@ embed_params({function, L, Name, Arity, Clauses}, Vals) ->
     {function, L, Name, NewArity, lists:reverse(NewClauses)}.
 
 
-%% Apply the embed_params function with the given list of {Name, Value}
-%% pairs to all forms in the MetaMod object. Exports are preserved even
+%% Apply the embed_params function with the list of {Name, Value}
+%% pairs to all forms in the MetaMod record. Exports are preserved even
 %% for functions whose arity has changed.
 %%
 %% @spec embed_all(MetaMod::meta_mod(), Vals::[{Name::atom(),
@@ -764,10 +760,10 @@ embed_all(MetaMod, Vals) ->
 
 
 
-%% @doc extend/2 allows you to create child modules from parent modules.
+%% @doc extend/2 Create a child module from a parent module.
 %% All exported functions that are unique to the parent module are
 %% added to the child module in the form of remote function calls
-%% to the parent module.
+%% to functions in the parent module.
 %%
 %% @spec extend(Base::atom() | meta_mod(), Child:atom() | meta_mod()) ->
 %%   NewChildMod::meta_mod()
