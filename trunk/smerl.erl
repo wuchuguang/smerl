@@ -142,6 +142,8 @@
 	 curry_replace/3,
 	 curry_replace/4,
 	 embed_params/2,
+	 embed_params/4,
+	 embed_params/5,
 	 embed_all/2,
 	 extend/2,
 	 to_src/1,
@@ -457,7 +459,8 @@ get_func(MetaMod, FuncName, Arity) ->
 
 get_func2([], FuncName, Arity) ->
     {error, {function_not_found, {FuncName, Arity}}};
-get_func2([{function, _Line, FuncName, Arity, _Clauses} = Form | _Rest], FuncName, Arity) ->
+get_func2([{function, _Line, FuncName, Arity, _Clauses} = Form | _Rest],
+	  FuncName, Arity) ->
     {ok, Form};
 get_func2([_Form|Rest], FuncName, Arity) ->		      
     get_func2(Rest, FuncName, Arity).
@@ -690,7 +693,7 @@ curry_replace(MetaMod, Name, Arity, Params) ->
 %%  to the Value element.
 %%
 %% @spec embed_params(Func::func_form(),
-%%   Vals::[{Name::atom(), Value:term()}]) -> NewForm::func_form()}
+%%   Vals::[{Name::atom(), Value:term()}]) -> NewForm::func_form()
 embed_params({function, L, Name, Arity, Clauses}, Vals) ->
     NewClauses =
 	lists:foldl(
@@ -723,8 +726,33 @@ embed_params({function, L, Name, Arity, Clauses}, Vals) ->
 	end,
     {function, L, Name, NewArity, lists:reverse(NewClauses)}.
 
+%% @doc Apply embed_params/2 to the function from the MetaMod and
+%%   add the resulting function to the MetaMod, returning a new
+%%   MetaMod.
+%%
+%% @spec embed_params(MetaMod::meta_mod(), Name::atom(), Arity::integer(),
+%%   Values::proplist()) -> {ok, NewMetaMod::meta_mod()} | {error, Err}
+embed_params(MetaMod, Name, Arity, Values) ->
+    embed_params(MetaMod, Name, Arity, Values, Name).
 
-%% Apply the embed_params function with the list of {Name, Value}
+%% @doc Apply embed_params/2 to the function from the MetaMod and
+%%   add the resulting function to the MetaMod after renaming the function.
+%%
+%% @spec embed_params(MetaMod::meta_mod(), Name::atom(), Arity::integer(),
+%%   Values::proplist()) -> {ok, NewMetaMod::meta_mod()} | {error, Err}
+embed_params(MetaMod, Name, Arity, Values, NewName) ->
+    case get_func(MetaMod, Name, Arity) of
+	{ok, Form} ->
+	    NewForm = embed_params(Form, Values),
+	    add_func(MetaMod, rename(NewForm, NewName));
+	Err ->
+	    Err
+    end.
+	
+    
+
+
+%% @doc Apply the embed_params function with the list of {Name, Value}
 %% pairs to all forms in the MetaMod record. Exports are preserved even
 %% for functions whose arity has changed.
 %%
