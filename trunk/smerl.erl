@@ -508,8 +508,7 @@ replace_func(MetaMod, Name, Fun) when is_function(Fun) ->
 %% @spec compile(MetaMod::meta_mod()) -> ok | {error, Error}
 compile(MetaMod) ->
     Forms = [{attribute, 1, module, MetaMod#meta_mod.module},
-	     {attribute, 2, export, lists:reverse(
-				      MetaMod#meta_mod.exports)}] ++
+	     {attribute, 2, export, get_exports(MetaMod)}] ++
 	     lists:reverse(MetaMod#meta_mod.forms),
     case compile:forms(Forms,
 		       [report_errors, report_warnings]) of
