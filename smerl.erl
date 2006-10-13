@@ -201,7 +201,7 @@ for_module(ModuleName) when is_atom(ModuleName) ->
 for_file(SrcFilePath) ->
     case epp:parse_file(SrcFilePath, [], []) of
 	{ok, Forms} ->
-	    {ok, mod_for_forms(Forms)};
+	    mod_for_forms(Forms);
 	_err ->
 	    {error, invalid_module}
     end.
