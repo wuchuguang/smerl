@@ -131,6 +131,7 @@
 	 replace_func/2,
 	 replace_func/3,
 	 compile/1,
+	 compile/2,
 	 rename/2,
 	 curry/2,
 	 curry/4,
@@ -507,17 +508,33 @@ replace_func(MetaMod, Name, Fun) when is_function(Fun) ->
 %%
 %% @spec compile(MetaMod::meta_mod()) -> ok | {error, Error}
 compile(MetaMod) ->
+    compile(MetaMod, [report_errors, report_warnings]).
+
+compile(MetaMod, Options) ->
     Forms = [{attribute, 1, module, MetaMod#meta_mod.module},
-	     {attribute, 2, export, get_exports(MetaMod)}] ++
+	     {attribute, 2, file, {atom_to_list(MetaMod#meta_mod.module),1}},
+	     {attribute, 3, export, get_exports(MetaMod)}] ++
 	     lists:reverse(MetaMod#meta_mod.forms),
-    case compile:forms(Forms,
-		       [report_errors, report_warnings]) of
+    case compile:forms(Forms, Options) of       
 	{ok, Module, Bin} ->
-	    code:purge(Module),
-	    case code:load_binary(Module,
-				  atom_to_list(Module) ++ ".erl", Bin) of
-		{module, _Module} ->
-		    ok;
+	    Res = 
+		case lists:keysearch(outdir, 1, Options) of
+		    {value, {outdir, OutDir}} ->
+			file:write_file(
+			  OutDir ++ ['/' | atom_to_list(MetaMod#meta_mod.module)] ++
+			  ".beam", Bin);
+		    false -> ok
+		end,
+	    case Res of
+		ok ->
+		    code:purge(Module),
+		    case code:load_binary(Module,
+					  atom_to_list(Module) ++ ".erl", Bin) of
+			{module, _Module} ->
+			    ok;
+			Err ->
+			    Err
+		    end;
 		Err ->
 		    Err
 	    end;
