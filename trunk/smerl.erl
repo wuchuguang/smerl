@@ -109,7 +109,7 @@
 
 
 -module(smerl).
--author("Yariv Sadan (yarivvv@gmail.com").
+-author("Yariv Sadan (yarivsblog@gmail.com, http://yarivsblog.com").
 -export([new/1,
 	 for_module/1,
 	 for_file/1,
