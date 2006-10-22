@@ -159,7 +159,7 @@
 %%    in the ERTS Users' manual.
 
 %% The record type holding the abstract representation for a module.
--record(meta_mod, {module, exports = [], forms = [], export_all = false}).
+-record(meta_mod, {module, file, exports = [], forms = [], export_all = false}).
 
 %% @doc Create a record for a new module with the given module name.
 %%
@@ -171,15 +171,15 @@ new(ModuleName) when is_atom(ModuleName) ->
 %%
 %% @spec for_module(ModuleName::atom() || string()) ->
 %%   {ok, meta_mod()} | {error, Error}
-for_module(ModuleName) when is_list(ModuleName) ->
-    new(list_to_atom(ModuleName));
+for_module(FileName) when is_list(FileName) ->
+    for_file(FileName);
 for_module(ModuleName) when is_atom(ModuleName) ->
     [_Exports, _Imports, _Attributes,
      {compile, [_Options, _Version, _Time, {source, Path}]}] =
 	ModuleName:module_info(),
     case for_file(Path) of
-	{ok, Mod} ->
-	    Mod;
+	{ok, _Mod} = Res->
+	    Res;
 	_Err ->
 	    case code:which(ModuleName) of
 		Path1 when is_list(Path1) ->
@@ -187,10 +187,10 @@ for_module(ModuleName) when is_atom(ModuleName) ->
 			{ok, Forms} ->
 			    mod_for_forms(Forms);
 			_Other ->
-			    {error, invalid_module}
+			    {error, {invalid_module, ModuleName}}
 		    end;
 		_Err ->
-		    {error, invalid_module}
+		    {error, {invalid_module, ModuleName}}
 	    end
     end.
 
@@ -204,10 +204,11 @@ for_file(SrcFilePath) ->
 	{ok, Forms} ->
 	    mod_for_forms(Forms);
 	_err ->
-	    {error, invalid_module}
+	    {error, {invalid_module, SrcFilePath}}
     end.
 
-mod_for_forms([_FileAttribute, {attribute, _, module, ModuleName}|Forms]) ->
+mod_for_forms([{attribute,_,file,{FileName,_FileNum}},
+	       {attribute, _, module, ModuleName}|Forms]) ->
     {Exports, OtherForms, ExportAll} =
 	lists:foldl(
 	  fun({attribute, _, export, ExportList},
@@ -222,6 +223,7 @@ mod_for_forms([_FileAttribute, {attribute, _, module, ModuleName}|Forms]) ->
 		  {ExportsAcc, [Form | FormsAcc], ExportAll}
 	  end, {[], [], false}, Forms),
     {ok, #meta_mod{module = ModuleName,
+		   file = FileName,
 		   exports = Exports,
 		   forms = OtherForms,
 		   export_all = ExportAll
@@ -377,11 +379,13 @@ form_for_fun(Name, Fun) ->
 	 {type, local}] ->
 	    EnvVars = lists:map(
 			fun({VarName, Val}) ->
-				{match,Line,{var,Line,VarName}, erl_parse:abstract(Val)}
+				{match,Line,{var,Line,VarName},
+				 erl_parse:abstract(Val)}
 			end, Vars),
 	    NewClauses = lists:map(
 			   fun({clause, Line1, Params, Guards, Exprs}) ->
-				   {clause, Line1, Params, Guards, EnvVars ++ Exprs}
+				   {clause, Line1, Params, Guards,
+				    EnvVars ++ Exprs}
 			   end, Clauses),
 	    {ok, {function, Line, Name, Arity, NewClauses}};
 	_Other ->
@@ -511,25 +515,34 @@ compile(MetaMod) ->
     compile(MetaMod, [report_errors, report_warnings]).
 
 compile(MetaMod, Options) ->
-    Forms = [{attribute, 1, module, MetaMod#meta_mod.module},
-	     {attribute, 2, file, {atom_to_list(MetaMod#meta_mod.module),1}},
-	     {attribute, 3, export, get_exports(MetaMod)}] ++
-	     lists:reverse(MetaMod#meta_mod.forms),
-    case compile:forms(Forms, Options) of       
+    Forms = [{attribute, 2, module, MetaMod#meta_mod.module},
+	     {attribute, 3, export, get_exports(MetaMod)}],
+    FileName =
+	case MetaMod#meta_mod.file of
+	    undefined -> atom_to_list(get_module(MetaMod));
+	    Val -> Val
+	end,
+
+    Forms1 = [{attribute, 1, file, {FileName, 1}} | Forms],
+    Forms2 = Forms1 ++ lists:reverse(MetaMod#meta_mod.forms),
+
+    case compile:forms(Forms2, Options) of       
 	{ok, Module, Bin} ->
 	    Res = 
 		case lists:keysearch(outdir, 1, Options) of
 		    {value, {outdir, OutDir}} ->
 			file:write_file(
-			  OutDir ++ ['/' | atom_to_list(MetaMod#meta_mod.module)] ++
+			  OutDir ++
+			  ['/' | atom_to_list(MetaMod#meta_mod.module)] ++
 			  ".beam", Bin);
 		    false -> ok
 		end,
 	    case Res of
 		ok ->
 		    code:purge(Module),
-		    case code:load_binary(Module,
-					  atom_to_list(Module) ++ ".erl", Bin) of
+		    case code:load_binary(
+			   Module,
+			   atom_to_list(Module) ++ ".erl", Bin) of
 			{module, _Module} ->
 			    ok;
 			Err ->
