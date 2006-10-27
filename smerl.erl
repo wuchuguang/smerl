@@ -122,6 +122,7 @@
 	 get_export_all/1,
 	 set_export_all/2,
 	 remove_export/3,
+	 get_attribute/2,
 	 add_func/2,
 	 add_func/3,
 	 add_func/4,
@@ -147,6 +148,7 @@
 	 embed_params/5,
 	 embed_all/2,
 	 extend/2,
+	 extend/3,
 	 to_src/1,
 	 to_src/2
 	]).
@@ -159,7 +161,8 @@
 %%    in the ERTS Users' manual.
 
 %% The record type holding the abstract representation for a module.
--record(meta_mod, {module, file, exports = [], forms = [], export_all = false}).
+-record(meta_mod, {module, file, exports = [], forms = [],
+		   export_all = false}).
 
 %% @doc Create a record for a new module with the given module name.
 %%
@@ -298,6 +301,18 @@ remove_export(MetaMod, FuncName, Arity) ->
     MetaMod#meta_mod{exports =
 		     lists:delete({FuncName, Arity},
 			     MetaMod#meta_mod.exports)}.
+
+%% @doc Get the value a the module's attribute.
+%%
+%% @spec get_attribute(MetaMod::meta_mod(), AttName::atom()) ->
+%%   {ok, Val} | error
+get_attribute(MetaMod, AttName) ->
+    case lists:keysearch(AttName, 3, get_forms(MetaMod)) of
+	{value, {attribute,_,_,Val}} ->
+	    {ok, Val};
+	_ -> error
+    end.
+
 
 %% Get the abstract representation, if available, for the module.
 %%
@@ -821,48 +836,86 @@ embed_all(MetaMod, Vals) ->
 %% All exported functions that are unique to the parent module are
 %% added to the child module in the form of remote function calls
 %% to functions in the parent module.
+%% 'ArityDiff' is an optional parameter that indicates the difference
+%% in arities Smerl should use when figuring out which functions to
+%% generate based on the modules' exports.
 %%
-%% @spec extend(Base::atom() | meta_mod(), Child:atom() | meta_mod()) ->
-%%   NewChildMod::meta_mod()
-extend(Base, Child) when is_atom(Base)->
-    case for_module(Base) of
-	{ok, MetaMod} ->
-	    extend(MetaMod, Child);
-	Err ->
-	    Err
-    end;
-extend(ParentMod, Child) when is_atom(Child) ->
-    case for_module(Child) of
-	{ok, ChildMod} ->
-	    extend(ParentMod, ChildMod);
-	Err ->
-	    Err
-    end;
-extend(ParentMod, ChildMod) ->
-    ParentExports = get_exports(ParentMod),
+%% @spec extend(Parent::atom() | meta_mod(), Child:atom() | meta_mod(),
+%%    ArityDiff:: integer()) ->
+%%      NewChildMod::meta_mod()
+extend(Parent, Child) ->
+    extend(Parent, Child, 0).
+
+extend(Parent, Child, ArityDiff) ->
+    {{ParentName, ParentExports, ParentMod}, ChildMod} = 
+	get_extend_data(Parent, Child),
     ChildExports = get_exports(ChildMod),
-    ParentModule = get_module(ParentMod),
-    ExportsDiff = ParentExports -- ChildExports,
-    NewChild = lists:foldl(
-      fun({FuncName, Arity}, ChildMod1) ->
-	      {ok, {function, _L, _Name, _Arity,
-		    [{clause, _L1, Params, _Guards, _Exprs}]}} =
-		  get_func(ParentMod, FuncName, Arity),
-	      Func =
-		  {function,1,FuncName,Arity,
-		   [{clause,1,Params,[],
-		     [{call,1,
-		       {remote,1,{atom,1,ParentModule},
-			{atom,1,FuncName}},
-		       Params}]}
-		   ]},
-	      {ok, ChildMod2} = add_func(ChildMod1, Func),
-	      ChildMod2
-      end, ChildMod, ExportsDiff),
+    ChildExports1 = [{ExportName, ExportArity + ArityDiff} ||
+			{ExportName, ExportArity} <-
+			    ChildExports],
+    ExportsDiff = ParentExports -- ChildExports1,
+    NewChild =
+	lists:foldl(
+	  fun({FuncName, Arity}, ChildMod1) ->
+		  Params = get_params(
+			     ParentMod, FuncName, Arity),
+		  Clause1 =
+		      {clause,1,Params,[],
+		       [{call,1,
+			 {remote,1,{atom,1,ParentName},
+			  {atom,1,FuncName}},
+			 Params}]},
+		  Func =
+		      {function,1,FuncName,Arity, [Clause1]},
+		  
+		  {ok, ChildMod2} = add_func(ChildMod1, Func),
+		  ChildMod2
+	  end, ChildMod, ExportsDiff),
     {ok, NewChild1} =
 	smerl:add_func(
-	  NewChild, "parent()->" ++ atom_to_list(ParentModule) ++ "."),
+	  NewChild, "parent()->" ++ atom_to_list(ParentName) ++ "."),
     NewChild1.
+
+get_extend_data(Parent, Child) when is_atom(Parent) ->
+    [{exports, Exports} |_] = Parent:module_info(),
+    Exports1 = Exports -- [{module_info, 0}],
+    Exports2 = Exports1 -- [{module_info, 1}],
+    ParentMod = case smerl:for_module(Parent) of
+		    {ok, M} -> M;
+		    {error, _} -> undefined
+		end,
+    get_extend_data({Parent, Exports2, ParentMod}, Child);
+get_extend_data(Parent, Child) when is_record(Parent, meta_mod) ->
+    get_extend_data({get_module(Parent),
+		     get_exports(Parent),
+		     Parent}, Child);
+get_extend_data(Parent, Child) when is_list(Parent) ->
+    case for_file(Parent) of
+	{ok, M1} ->
+	    get_extend_data(M1, Child);
+	Err ->
+	    Err
+    end;
+get_extend_data({_,_,_} = ParentData, Child) when is_atom(Child);
+						  is_list(Child) ->
+    case for_module(Child) of
+	{ok, MetaMod} ->
+	    {ParentData, MetaMod};
+	Err ->
+	    Err
+    end;
+get_extend_data(ParentData, Child) when is_record(Child, meta_mod) ->
+    {ParentData, Child}.
+
+get_params(_, _, 0) -> [];
+get_params(undefined, _FuncName, Arity) ->
+    [{var,1,list_to_atom("P" ++ integer_to_list(Num))}
+     || Num <- lists:seq(1, Arity)];
+get_params(ParentMod, FuncName, Arity) ->
+    {ok, {function, _L, _Name, _Arity,
+	  [{clause,_,Params,_Guards,_Exprs} | _]}} =
+	get_func(ParentMod, FuncName, Arity),
+    Params.
 
 
 %% @doc Return the pretty-printed source code for this module.
