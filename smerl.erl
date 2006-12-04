@@ -527,7 +527,10 @@ replace_func(MetaMod, Name, Fun) when is_function(Fun) ->
 %%
 %% @spec compile(MetaMod::meta_mod()) -> ok | {error, Error}
 compile(MetaMod) ->
-    compile(MetaMod, [report_errors, report_warnings]).
+    compile(MetaMod, undefined).
+
+compile(MetaMod, undefined) ->
+    compile(MetaMod, [report_errors, report_warnings]);
 
 compile(MetaMod, Options) ->
     Forms = [{attribute, 2, module, MetaMod#meta_mod.module},
