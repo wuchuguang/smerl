@@ -823,17 +823,13 @@ embed_all(MetaMod, Vals) ->
 			      [{Name, NewArity} | NewExports1]
 		      end,
 		  {[NewForm | Forms1], Exports2, NewExports2};
-	     (_, Acc) ->
-		  Acc
+	     (Form, {Forms1, Exports1, NewExports1}) ->
+		  {[Form | Forms1], Exports1, NewExports1}
 	  end, {[], Exports, []}, Forms),
-    {NewForms1, NewExports1} =
-	{NewForms, NewExports},
     #meta_mod{module = get_module(MetaMod),
-	      exports = Exports3 ++ NewExports1,
-	      forms = NewForms1,
+	      exports = Exports3 ++ NewExports,
+	      forms = lists:reverse(NewForms),
 	      export_all = get_export_all(MetaMod)}.
-
-
 
 %% @doc extend/2 Create a child module from a parent module.
 %% All exported functions that are unique to the parent module are
